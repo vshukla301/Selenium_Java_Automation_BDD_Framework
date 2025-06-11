@@ -1,0 +1,44 @@
+trigger: none  # No CI trigger by default
+
+schedules:
+  - cron: "30 2 * * *"  # Scheduled to run daily at 8:00 AM IST (2:30 AM UTC)
+    displayName: Daily Scheduled Run
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  # Define default environment (can be overridden at runtime)
+  testEnv: 'QA'
+
+stages:
+  - stage: Execute_Tests
+    displayName: "Run Main Test Suite"
+    jobs:
+      - job: Run_Tests
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - task: Maven@3
+            displayName: 'Run Main Test Suite'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean test'
+              options: '-Dcucumber.filter.tags="@sanity" -Denv=$(testEnv)'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFiles: '**/target/surefire-reports/*.xml'
+              testRunTitle: 'Main Test Results'
+
+          - task: Bash@3
+            displayName: 'Check for Failures and Trigger Failed Runner'
+            condition: failed()
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Main test suite failed. Running FailedTestRunner..."
+                mvn test -Dtest=FailedTestRunner -Denv=$(testEnv)
